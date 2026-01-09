@@ -22,37 +22,14 @@ HTML = """
 <title>🌍 AQI Checker</title>
 <style>
     @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-    body {
-        font-family: 'Roboto', sans-serif;
-        background: linear-gradient(135deg, #0f172a, #020617);
-        color: #fff;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 100vh;
-        margin: 0;
-    }
-    .container {
-        background: #1e293b;
-        padding: 30px;
-        border-radius: 15px;
-        box-shadow: 0 0 20px rgba(0,0,0,0.5);
-        width: 400px;
-        text-align: center;
-    }
+    body { font-family: 'Roboto', sans-serif; background: linear-gradient(135deg, #0f172a, #020617); color: #fff;
+           display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .container { background: #1e293b; padding: 30px; border-radius: 15px; box-shadow: 0 0 20px rgba(0,0,0,0.5);
+                 width: 400px; text-align: center; }
     h1 { margin-bottom: 20px; color: #22c55e; }
     input { width: 90%; padding: 12px; margin: 10px 0; border-radius: 8px; border: none; }
-    button {
-        width: 95%;
-        padding: 12px;
-        border: none;
-        border-radius: 8px;
-        background: #22c55e;
-        color: #fff;
-        font-weight: bold;
-        cursor: pointer;
-        transition: 0.3s;
-    }
+    button { width: 95%; padding: 12px; border: none; border-radius: 8px; background: #22c55e;
+             color: #fff; font-weight: bold; cursor: pointer; transition: 0.3s; }
     button:hover { background: #16a34a; }
     .result { margin-top: 20px; padding: 15px; border-radius: 10px; background: #334155; }
     .error { color: #f87171; font-weight: bold; }
@@ -78,14 +55,10 @@ HTML = """
     <div class="result">
         <p><b>City:</b> {{ city }}</p>
         <p><b>AQI:</b> {{ aqi }}</p>
-        <p><b>Status:</b>
-            <span class="{% if status_class %}{{ status_class }}{% endif %}">{{ status }}</span>
-        </p>
+        <p><b>Status:</b> <span class="{{ status_class }}">{{ status }}</span></p>
     </div>
     {% elif error %}
-    <div class="result error">
-        {{ error }}
-    </div>
+    <div class="result error">{{ error }}</div>
     {% endif %}
 </div>
 </body>
@@ -107,6 +80,16 @@ def aqi_status(aqi):
     elif aqi <= 300: return "Very Poor 🤢", "aqi-verypoor"
     else: return "Severe ☠️", "aqi-severe"
 
+# Helper to get real IP
+def get_client_ip():
+    ip = request.headers.get("X-Forwarded-For")
+    if ip:
+        # Sometimes multiple IPs: "client, proxy1, proxy2"
+        ip = ip.split(",")[0].strip()
+    else:
+        ip = request.remote_addr
+    return ip
+
 @app.route("/", methods=["GET","POST"])
 def home():
     aqi = None
@@ -120,29 +103,36 @@ def home():
         email = request.form.get("email")
         honeypot = request.form.get("website")
 
+        # Bot check
         if honeypot:
             error = "Bot detected"
             return render_template_string(HTML, error=error)
 
+        # Required fields
         if not city or not email:
             error = "City and email required"
             return render_template_string(HTML, error=error)
 
+        # Email validation
         if not is_valid_email(email):
             error = "Invalid email format"
             return render_template_string(HTML, error=error)
 
+        # Duplicate email
         if email in used_emails:
             error = "Too many requests from this email"
             return render_template_string(HTML, error=error)
 
         used_emails.add(email)
 
-        # Log email + IP in Render logs only
-        ip = request.headers.get("X-Forwarded-For", request.remote_addr)
+        # Get real client IP
+        ip = get_client_ip()
         time_now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+        # Log IP + Email + City + Timestamp
         print(f"[{time_now}] IP: {ip} | Email: {email} | City: {city}")
 
+        # AQI API call
         if not AQI_API_KEY:
             error = "AQI API key not set"
             return render_template_string(HTML, error=error)
